@@ -78,65 +78,110 @@ async function executeScriptAsync(executionId: number, steps: AutomationStep[]) 
   }
 }
 
+interface StepResult {
+  stepId: string;
+  action: string;
+  description?: string;
+  success: boolean;
+  screenshot?: string;
+  extractedData?: any;
+  error?: string;
+  timestamp: string;
+}
+
 async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionResult> {
   const result: ExecutionResult = {
     success: true,
     screenshots: [],
     extractedData: {},
     logs: [],
+    stepResults: [],
   };
 
   // This is a mock implementation - in a real scenario, you would use a browser automation library
-  for (const step of steps) {
-    result.logs.push(`Executing step: ${step.action} - ${step.description || 'No description'}`);
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const stepResult: StepResult = {
+      stepId: step.id,
+      action: step.action,
+      description: step.description,
+      success: true,
+      timestamp: new Date().toISOString(),
+    };
+
+    result.logs.push(`Step ${i + 1}: Executing ${step.action} - ${step.description || 'No description'}`);
     
-    switch (step.action) {
-      case "navigate":
-        result.logs.push(`Navigating to: ${step.value}`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        break;
-      
-      case "click":
-        result.logs.push(`Clicking element: ${step.selector}`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        break;
-      
-      case "type":
-        result.logs.push(`Typing "${step.value}" into element: ${step.selector}`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        break;
-      
-      case "wait":
-        const waitTime = step.waitTime || 1000;
-        result.logs.push(`Waiting for ${waitTime}ms`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        break;
-      
-      case "screenshot":
-        result.logs.push("Taking screenshot");
-        result.screenshots.push(`screenshot_${Date.now()}.png`);
-        break;
-      
-      case "extract_text":
-        result.logs.push(`Extracting text from: ${step.selector}`);
-        result.extractedData[step.id] = "Mock extracted text";
-        break;
-      
-      case "extract_attribute":
-        result.logs.push(`Extracting attribute "${step.value}" from: ${step.selector}`);
-        result.extractedData[step.id] = "Mock attribute value";
-        break;
-      
-      case "scroll":
-        result.logs.push("Scrolling page");
-        await new Promise(resolve => setTimeout(resolve, 500));
-        break;
-      
-      case "select_dropdown":
-        result.logs.push(`Selecting "${step.value}" from dropdown: ${step.selector}`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        break;
+    try {
+      switch (step.action) {
+        case "navigate":
+          result.logs.push(`Navigating to: ${step.value}`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          break;
+        
+        case "click":
+          result.logs.push(`Clicking element: ${step.selector}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          break;
+        
+        case "type":
+          result.logs.push(`Typing "${step.value}" into element: ${step.selector}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          break;
+        
+        case "wait":
+          const waitTime = step.waitTime || 1000;
+          result.logs.push(`Waiting for ${waitTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          break;
+        
+        case "screenshot":
+          result.logs.push("Taking screenshot");
+          const screenshotUrl = `screenshot_${Date.now()}.png`;
+          result.screenshots.push(screenshotUrl);
+          stepResult.screenshot = screenshotUrl;
+          break;
+        
+        case "extract_text":
+          result.logs.push(`Extracting text from: ${step.selector}`);
+          const extractedText = `Mock extracted text from ${step.selector}`;
+          result.extractedData[step.id] = extractedText;
+          stepResult.extractedData = extractedText;
+          break;
+        
+        case "extract_attribute":
+          result.logs.push(`Extracting attribute "${step.value}" from: ${step.selector}`);
+          const extractedAttr = `Mock attribute value for ${step.value}`;
+          result.extractedData[step.id] = extractedAttr;
+          stepResult.extractedData = extractedAttr;
+          break;
+        
+        case "scroll":
+          result.logs.push("Scrolling page");
+          await new Promise(resolve => setTimeout(resolve, 500));
+          break;
+        
+        case "select_dropdown":
+          result.logs.push(`Selecting "${step.value}" from dropdown: ${step.selector}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          break;
+      }
+
+      // Capture a screenshot after every step (except for the screenshot action itself)
+      if (step.action !== "screenshot") {
+        const autoScreenshotUrl = `step_${i + 1}_${Date.now()}.png`;
+        result.screenshots.push(autoScreenshotUrl);
+        stepResult.screenshot = autoScreenshotUrl;
+        result.logs.push(`Screenshot captured after step ${i + 1}`);
+      }
+
+    } catch (error) {
+      stepResult.success = false;
+      stepResult.error = error instanceof Error ? error.message : String(error);
+      result.logs.push(`Error in step ${i + 1}: ${stepResult.error}`);
+      result.success = false;
     }
+
+    result.stepResults.push(stepResult);
   }
 
   return result;

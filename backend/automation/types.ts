@@ -40,10 +40,22 @@ export interface Execution {
   completedAt?: Date;
 }
 
+export interface StepResult {
+  stepId: string;
+  action: string;
+  description?: string;
+  success: boolean;
+  screenshot?: string;
+  extractedData?: any;
+  error?: string;
+  timestamp: string;
+}
+
 export interface ExecutionResult {
   success: boolean;
   screenshots: string[];
   extractedData: Record<string, any>;
   logs: string[];
+  stepResults?: StepResult[];
   error?: string;
 }

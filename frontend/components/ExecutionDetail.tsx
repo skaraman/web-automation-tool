@@ -3,7 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle, XCircle, Loader } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Clock, CheckCircle, XCircle, Loader, Camera, AlertCircle } from "lucide-react";
 import backend from "~backend/client";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -175,39 +176,160 @@ function ExecutionResults({ result }: ExecutionResultsProps) {
   if (!result) return null;
 
   return (
-    <div className="space-y-4">
-      {result.logs && result.logs.length > 0 && (
-        <div>
-          <h4 className="font-medium text-gray-900 mb-2">Execution Log</h4>
-          <div className="bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto">
-            {result.logs.map((log: string, index: number) => (
-              <div key={index} className="text-sm text-gray-700 font-mono">
-                {log}
+    <Tabs defaultValue="steps" className="w-full">
+      <TabsList className="grid w-full grid-cols-4">
+        <TabsTrigger value="steps">Step Results</TabsTrigger>
+        <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
+        <TabsTrigger value="data">Extracted Data</TabsTrigger>
+        <TabsTrigger value="logs">Execution Log</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="steps" className="space-y-4">
+        {result.stepResults && result.stepResults.length > 0 ? (
+          <div className="space-y-4">
+            {result.stepResults.map((stepResult: any, index: number) => (
+              <StepResultCard key={stepResult.stepId} stepResult={stepResult} stepNumber={index + 1} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No step results available
+          </div>
+        )}
+      </TabsContent>
+
+      <TabsContent value="screenshots" className="space-y-4">
+        {result.screenshots && result.screenshots.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {result.screenshots.map((screenshot: string, index: number) => (
+              <div key={index} className="border rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Camera className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium">Screenshot {index + 1}</span>
+                </div>
+                <div className="bg-gray-100 rounded-lg p-8 text-center">
+                  <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                  <div className="text-sm text-gray-500">{screenshot}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    Mock screenshot placeholder
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {result.screenshots && result.screenshots.length > 0 && (
-        <div>
-          <h4 className="font-medium text-gray-900 mb-2">Screenshots</h4>
-          <div className="text-sm text-gray-600">
-            {result.screenshots.length} screenshot(s) captured
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No screenshots captured
           </div>
-        </div>
-      )}
+        )}
+      </TabsContent>
 
-      {result.extractedData && Object.keys(result.extractedData).length > 0 && (
-        <div>
-          <h4 className="font-medium text-gray-900 mb-2">Extracted Data</h4>
-          <div className="bg-gray-50 rounded-lg p-3">
+      <TabsContent value="data" className="space-y-4">
+        {result.extractedData && Object.keys(result.extractedData).length > 0 ? (
+          <div className="bg-gray-50 rounded-lg p-4">
             <pre className="text-sm text-gray-700 whitespace-pre-wrap">
               {JSON.stringify(result.extractedData, null, 2)}
             </pre>
           </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No data extracted
+          </div>
+        )}
+      </TabsContent>
+
+      <TabsContent value="logs" className="space-y-4">
+        {result.logs && result.logs.length > 0 ? (
+          <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+            {result.logs.map((log: string, index: number) => (
+              <div key={index} className="text-sm text-gray-700 font-mono py-1">
+                <span className="text-gray-400 mr-2">{String(index + 1).padStart(3, '0')}:</span>
+                {log}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No logs available
+          </div>
+        )}
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+interface StepResultCardProps {
+  stepResult: any;
+  stepNumber: number;
+}
+
+function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
+  const getStepIcon = (success: boolean) => {
+    return success ? (
+      <CheckCircle className="h-5 w-5 text-green-600" />
+    ) : (
+      <XCircle className="h-5 w-5 text-red-600" />
+    );
+  };
+
+  return (
+    <Card className={`border-l-4 ${stepResult.success ? 'border-l-green-500' : 'border-l-red-500'}`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            {getStepIcon(stepResult.success)}
+            <div>
+              <CardTitle className="text-base">
+                Step {stepNumber}: {stepResult.action.replace('_', ' ')}
+              </CardTitle>
+              {stepResult.description && (
+                <p className="text-sm text-gray-600 mt-1">{stepResult.description}</p>
+              )}
+            </div>
+          </div>
+          <Badge variant={stepResult.success ? "default" : "destructive"}>
+            {stepResult.success ? "Success" : "Failed"}
+          </Badge>
         </div>
-      )}
-    </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {stepResult.error && (
+          <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+            <div className="text-sm text-red-700">{stepResult.error}</div>
+          </div>
+        )}
+
+        {stepResult.screenshot && (
+          <div>
+            <h5 className="text-sm font-medium text-gray-900 mb-2 flex items-center">
+              <Camera className="h-4 w-4 mr-1" />
+              Screenshot
+            </h5>
+            <div className="bg-gray-100 rounded-lg p-6 text-center">
+              <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <div className="text-sm text-gray-500">{stepResult.screenshot}</div>
+              <div className="text-xs text-gray-400 mt-1">
+                Mock screenshot placeholder
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stepResult.extractedData && (
+          <div>
+            <h5 className="text-sm font-medium text-gray-900 mb-2">Extracted Data</h5>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <code className="text-sm text-gray-700">{stepResult.extractedData}</code>
+            </div>
+          </div>
+        )}
+
+        <div className="text-xs text-gray-500">
+          Executed at: {format(new Date(stepResult.timestamp), "PPpp")}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
