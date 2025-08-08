@@ -105,14 +105,14 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
   let page: Page | null = null;
 
   // Helper function to ensure page stability before screenshots
-  async function ensurePageStability(page: Page, logs: string[]): Promise<void> {
+  async function ensurePageStability(page: Page, logs: string[], stabilityTimeout: number = 3000): Promise<void> {
     try {
       logs.push("Ensuring page stability before screenshot...");
       
       // Wait for any pending network requests using a simplified approach
       await new Promise<void>((resolve) => {
         let timeoutId: NodeJS.Timeout;
-        const maxWaitTime = 3000; // Maximum 3 seconds wait
+        const maxWaitTime = Math.min(stabilityTimeout, 5000); // Cap at 5 seconds, use configured timeout
         
         const onRequest = () => {
           clearTimeout(timeoutId);
@@ -260,6 +260,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Clicking element: ${step.selector}`);
             await page.click(step.selector);
             result.logs.push(`Successfully clicked: ${step.selector}`);
+            
+            // Brief pause after click to allow for immediate visual feedback
+            await new Promise(resolve => setTimeout(resolve, 200));
             break;
           
           case "type":
@@ -280,6 +283,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Typing "${step.value}" into: ${step.selector}`);
             await page.type(step.selector, step.value);
             result.logs.push(`Successfully typed text into: ${step.selector}`);
+            
+            // Brief pause after typing to allow for visual updates (autocomplete, validation, etc.)
+            await new Promise(resolve => setTimeout(resolve, 300));
             break;
           
           case "wait":
@@ -374,7 +380,7 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
           
           case "screenshot":
             result.logs.push("Taking manual screenshot");
-            await ensurePageStability(page, result.logs);
+            await ensurePageStability(page, result.logs, step.stabilityTimeout);
             const screenshotBuffer = await page.screenshot({ 
               fullPage: true,
               type: 'png',
@@ -416,7 +422,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.evaluate(() => {
               window.scrollBy(0, window.innerHeight);
             });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for scroll animations and any lazy-loaded content
+            await new Promise(resolve => setTimeout(resolve, 800));
+            result.logs.push("Scroll completed");
             break;
           
           case "select_dropdown":
@@ -426,13 +434,17 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Selecting "${step.value}" from dropdown: ${step.selector}`);
             await page.waitForSelector(step.selector, { timeout: 10000 });
             await page.select(step.selector, step.value);
+            result.logs.push(`Successfully selected "${step.value}" from dropdown`);
+            
+            // Brief pause after selection to allow for change events and visual updates
+            await new Promise(resolve => setTimeout(resolve, 300));
             break;
         }
 
         // Capture a screenshot after every step (except for the screenshot action itself)
         if (step.action !== "screenshot") {
           result.logs.push(`Capturing screenshot after step ${i + 1}`);
-          await ensurePageStability(page, result.logs);
+          await ensurePageStability(page, result.logs, step.stabilityTimeout);
           const autoScreenshotBuffer = await page.screenshot({ 
             fullPage: true,
             type: 'png',
@@ -457,7 +469,7 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
         // Still try to capture a screenshot on error
         try {
           result.logs.push(`Capturing error screenshot for step ${i + 1}`);
-          await ensurePageStability(page, result.logs);
+          await ensurePageStability(page, result.logs, step.stabilityTimeout);
           const errorScreenshotBuffer = await page.screenshot({ 
             fullPage: true,
             type: 'png',
