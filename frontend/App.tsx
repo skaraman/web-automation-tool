@@ -6,6 +6,8 @@ import { ScriptList } from "./components/ScriptList";
 import { ScriptEditor } from "./components/ScriptEditor";
 import { ScriptDetail } from "./components/ScriptDetail";
 import { ExecutionDetail } from "./components/ExecutionDetail";
+import { ScreenshotGallery } from "./components/ScreenshotGallery";
+import { AllExecutions } from "./components/AllExecutions";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +22,8 @@ export default function App() {
             <Route path="/scripts/:id" element={<ScriptDetail />} />
             <Route path="/scripts/:id/edit" element={<ScriptEditor />} />
             <Route path="/executions/:id" element={<ExecutionDetail />} />
+            <Route path="/executions" element={<AllExecutions />} />
+            <Route path="/screenshots" element={<ScreenshotGallery />} />
           </Routes>
         </Layout>
         <Toaster />

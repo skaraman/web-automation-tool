@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Bot, Plus, Home } from "lucide-react";
+import { Bot, Plus, Home, Camera, History } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +29,26 @@ export function Layout({ children }: LayoutProps) {
                 <Link to="/">
                   <Home className="h-4 w-4 mr-2" />
                   Scripts
+                </Link>
+              </Button>
+
+              <Button
+                variant={location.pathname === "/screenshots" ? "default" : "ghost"}
+                asChild
+              >
+                <Link to="/screenshots">
+                  <Camera className="h-4 w-4 mr-2" />
+                  Screenshots
+                </Link>
+              </Button>
+
+              <Button
+                variant={location.pathname === "/executions" ? "default" : "ghost"}
+                asChild
+              >
+                <Link to="/executions">
+                  <History className="h-4 w-4 mr-2" />
+                  History
                 </Link>
               </Button>
               

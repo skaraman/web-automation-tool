@@ -277,7 +277,7 @@ interface ScreenshotCardProps {
 
 function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
   // Fetch the actual screenshot data
-  const { data: screenshotData } = useQuery({
+  const { data: screenshotData, isLoading } = useQuery({
     queryKey: ["screenshot", screenshot.id],
     queryFn: () => backend.automation.getScreenshot({ id: screenshot.id }),
   });
@@ -323,7 +323,12 @@ function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
       </div>
       
       <div className="rounded-lg overflow-hidden border">
-        {screenshotUrl ? (
+        {isLoading ? (
+          <div className="bg-gray-100 rounded-lg p-8 text-center">
+            <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+            <div className="text-sm text-gray-500">Loading screenshot...</div>
+          </div>
+        ) : screenshotUrl ? (
           <img 
             src={screenshotUrl} 
             alt={`Step ${screenshot.stepNumber} screenshot`}
@@ -345,7 +350,7 @@ function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
         ) : (
           <div className="bg-gray-100 rounded-lg p-8 text-center">
             <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-            <div className="text-sm text-gray-500">Loading screenshot...</div>
+            <div className="text-sm text-gray-500">Screenshot unavailable</div>
           </div>
         )}
       </div>
@@ -442,6 +447,19 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
     return screenshot;
   };
 
+  // Fetch screenshot data if we have a screenshot ID
+  const { data: screenshotData } = useQuery({
+    queryKey: ["stepScreenshot", stepResult.screenshotId],
+    queryFn: () => backend.automation.getScreenshot({ id: stepResult.screenshotId }),
+    enabled: Boolean(stepResult.screenshotId),
+  });
+
+  const displayScreenshotUrl = screenshotData 
+    ? `data:${screenshotData.contentType};base64,${screenshotData.data}`
+    : isValidScreenshot 
+      ? getScreenshotUrl(stepResult.screenshot)
+      : null;
+
   return (
     <Card className={`border-l-4 ${stepResult.success ? 'border-l-green-500' : 'border-l-red-500'}`}>
       <CardHeader className="pb-3">
@@ -471,37 +489,42 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
           </div>
         )}
 
-        {stepResult.screenshot && (
+        {(stepResult.screenshot || stepResult.screenshotId) && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <h5 className="text-sm font-medium text-gray-900 flex items-center">
                 <Camera className="h-4 w-4 mr-1" />
                 Screenshot
               </h5>
-              {isValidScreenshot && (
+              {displayScreenshotUrl && (
                 <div className="flex space-x-2">
                   <Button variant="outline" size="sm" asChild>
-                    <a href={getScreenshotUrl(stepResult.screenshot)} target="_blank" rel="noopener noreferrer">
+                    <a href={displayScreenshotUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3 w-3 mr-1" />
                       View Full
                     </a>
                   </Button>
-                  {stepResult.screenshot.startsWith('/api/') && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={getScreenshotUrl(stepResult.screenshot)} download={`step_${stepNumber}_screenshot.png`}>
-                        <Download className="h-3 w-3 mr-1" />
-                        Download
-                      </a>
+                  {screenshotData && (
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = displayScreenshotUrl;
+                      link.download = screenshotData.filename;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}>
+                      <Download className="h-3 w-3 mr-1" />
+                      Download
                     </Button>
                   )}
                 </div>
               )}
             </div>
             
-            {isValidScreenshot ? (
+            {displayScreenshotUrl ? (
               <div className="rounded-lg overflow-hidden border">
                 <img 
-                  src={getScreenshotUrl(stepResult.screenshot)} 
+                  src={displayScreenshotUrl} 
                   alt={`Step ${stepNumber} screenshot`}
                   className="w-full h-auto max-h-48 object-contain bg-gray-50"
                   onError={(e) => {

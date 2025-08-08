@@ -176,7 +176,7 @@ export function ScriptDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ExecutionHistory scriptId={script.id} />
+              <ExecutionHistory scriptId={script.id} showClearButton={true} />
             </CardContent>
           </Card>
         </div>

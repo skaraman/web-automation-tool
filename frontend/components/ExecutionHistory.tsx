@@ -2,17 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, ExternalLink } from "lucide-react";
+import { Clock, ExternalLink, Trash2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import backend from "~backend/client";
 import { formatDistanceToNow } from "date-fns";
 
 interface ExecutionHistoryProps {
   scriptId?: number;
   limit?: number;
+  showClearButton?: boolean;
 }
 
-export function ExecutionHistory({ scriptId, limit = 10 }: ExecutionHistoryProps) {
-  const { data: executionsData, isLoading } = useQuery({
+export function ExecutionHistory({ scriptId, limit = 10, showClearButton = false }: ExecutionHistoryProps) {
+  const { toast } = useToast();
+
+  const { data: executionsData, isLoading, refetch } = useQuery({
     queryKey: ["executions", scriptId],
     queryFn: () => backend.automation.listExecutions({ 
       scriptId: scriptId,
@@ -20,6 +24,28 @@ export function ExecutionHistory({ scriptId, limit = 10 }: ExecutionHistoryProps
     }),
     refetchInterval: 5000, // Refresh every 5 seconds to show live updates
   });
+
+  const handleClearHistory = async () => {
+    if (!confirm("Are you sure you want to clear the execution history? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const result = await backend.automation.clearExecutions({ scriptId });
+      toast({
+        title: "History cleared",
+        description: `${result.deletedCount} execution${result.deletedCount !== 1 ? 's' : ''} deleted successfully.`,
+      });
+      refetch();
+    } catch (error) {
+      console.error("Failed to clear history:", error);
+      toast({
+        title: "Error",
+        description: "Failed to clear execution history. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return <div className="text-gray-500">Loading executions...</div>;
@@ -50,6 +76,20 @@ export function ExecutionHistory({ scriptId, limit = 10 }: ExecutionHistoryProps
 
   return (
     <div className="space-y-3">
+      {showClearButton && executions.length > 0 && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearHistory}
+            className="text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-3 w-3 mr-1" />
+            Clear History
+          </Button>
+        </div>
+      )}
+
       {executions.map((execution) => (
         <div key={execution.id} className="border rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
