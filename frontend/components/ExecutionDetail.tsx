@@ -1,0 +1,213 @@
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Clock, CheckCircle, XCircle, Loader } from "lucide-react";
+import backend from "~backend/client";
+import { formatDistanceToNow, format } from "date-fns";
+
+export function ExecutionDetail() {
+  const { id } = useParams<{ id: string }>();
+
+  const { data: execution, isLoading } = useQuery({
+    queryKey: ["execution", id],
+    queryFn: () => backend.automation.getExecution({ id: parseInt(id!) }),
+    enabled: Boolean(id),
+    refetchInterval: (data) => {
+      // Stop refetching if execution is completed or failed
+      return data?.status === "running" ? 2000 : false;
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading execution details...</div>
+      </div>
+    );
+  }
+
+  if (!execution) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-gray-500 mb-4">Execution not found</div>
+        <Button asChild>
+          <Link to="/">Back to Scripts</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "running":
+        return <Loader className="h-5 w-5 animate-spin text-blue-600" />;
+      case "completed":
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case "failed":
+        return <XCircle className="h-5 w-5 text-red-600" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "running":
+        return "bg-blue-100 text-blue-800";
+      case "completed":
+        return "bg-green-100 text-green-800";
+      case "failed":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" asChild>
+            <Link to="/">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Link>
+          </Button>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Execution #{execution.id}
+          </h1>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-3">
+                {getStatusIcon(execution.status)}
+                <span>Execution Status</span>
+                <Badge className={getStatusColor(execution.status)}>
+                  {execution.status}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-900">Started:</span>
+                  <div className="text-gray-600 flex items-center mt-1">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {format(new Date(execution.startedAt), "PPpp")}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {formatDistanceToNow(new Date(execution.startedAt), { addSuffix: true })}
+                  </div>
+                </div>
+                
+                {execution.completedAt && (
+                  <div>
+                    <span className="font-medium text-gray-900">Completed:</span>
+                    <div className="text-gray-600 flex items-center mt-1">
+                      <Clock className="h-4 w-4 mr-1" />
+                      {format(new Date(execution.completedAt), "PPpp")}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Duration: {Math.round((new Date(execution.completedAt).getTime() - new Date(execution.startedAt).getTime()) / 1000)}s
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {execution.errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <h4 className="font-medium text-red-900 mb-1">Error Message</h4>
+                  <p className="text-red-700 text-sm">{execution.errorMessage}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {execution.result && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Execution Results</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ExecutionResults result={execution.result} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Script Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="text-sm">
+                  <span className="font-medium text-gray-900">Script ID:</span>
+                  <div className="text-gray-600">#{execution.scriptId}</div>
+                </div>
+                
+                <Button variant="outline" size="sm" asChild className="w-full">
+                  <Link to={`/scripts/${execution.scriptId}`}>
+                    View Script Details
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ExecutionResultsProps {
+  result: any;
+}
+
+function ExecutionResults({ result }: ExecutionResultsProps) {
+  if (!result) return null;
+
+  return (
+    <div className="space-y-4">
+      {result.logs && result.logs.length > 0 && (
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2">Execution Log</h4>
+          <div className="bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto">
+            {result.logs.map((log: string, index: number) => (
+              <div key={index} className="text-sm text-gray-700 font-mono">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {result.screenshots && result.screenshots.length > 0 && (
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2">Screenshots</h4>
+          <div className="text-sm text-gray-600">
+            {result.screenshots.length} screenshot(s) captured
+          </div>
+        </div>
+      )}
+
+      {result.extractedData && Object.keys(result.extractedData).length > 0 && (
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2">Extracted Data</h4>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+              {JSON.stringify(result.extractedData, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
