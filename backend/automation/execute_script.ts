@@ -104,6 +104,102 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
   let browser: Browser | null = null;
   let page: Page | null = null;
 
+  // Helper function to ensure page stability before screenshots
+  async function ensurePageStability(page: Page, logs: string[], stabilityTimeout: number = 3000): Promise<void> {
+    try {
+      logs.push("Ensuring page stability before screenshot...");
+      
+      // Wait for any pending network requests using a simplified approach
+      await new Promise<void>((resolve) => {
+        let timeoutId: NodeJS.Timeout;
+        const maxWaitTime = Math.min(stabilityTimeout, 5000); // Cap at 5 seconds, use configured timeout
+        
+        const onRequest = () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            page.off('request', onRequest);
+            page.off('response', onResponse);
+            resolve();
+          }, 300); // No requests for 300ms = idle
+        };
+        
+        const onResponse = () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            page.off('request', onRequest);
+            page.off('response', onResponse);
+            resolve();
+          }, 300);
+        };
+        
+        page.on('request', onRequest);
+        page.on('response', onResponse);
+        
+        // Start initial timer
+        timeoutId = setTimeout(() => {
+          page.off('request', onRequest);
+          page.off('response', onResponse);
+          resolve();
+        }, 300);
+        
+        // Safety timeout
+        setTimeout(() => {
+          page.off('request', onRequest);
+          page.off('response', onResponse);
+          clearTimeout(timeoutId);
+          resolve();
+        }, maxWaitTime);
+      });
+      
+      // Wait for any animations or transitions to complete
+      await page.evaluate(() => {
+        return new Promise<void>((resolve) => {
+          // Wait for any CSS transitions/animations
+          const animationPromises: Promise<void>[] = [];
+          
+          document.querySelectorAll('*').forEach(element => {
+            const computedStyle = window.getComputedStyle(element);
+            const animationDuration = parseFloat(computedStyle.animationDuration) || 0;
+            const transitionDuration = parseFloat(computedStyle.transitionDuration) || 0;
+            
+            if (animationDuration > 0) {
+              animationPromises.push(
+                new Promise<void>((animResolve) => {
+                  setTimeout(() => animResolve(), Math.min(animationDuration * 1000, 2000));
+                })
+              );
+            }
+            
+            if (transitionDuration > 0) {
+              animationPromises.push(
+                new Promise<void>((transResolve) => {
+                  setTimeout(() => transResolve(), Math.min(transitionDuration * 1000, 2000));
+                })
+              );
+            }
+          });
+          
+          // Wait for all animations to complete, or timeout after 2 seconds
+          Promise.race([
+            Promise.all(animationPromises),
+            new Promise<void>((timeoutResolve) => setTimeout(() => timeoutResolve(), 2000))
+          ]).then(() => {
+            // Additional frame wait for visual stability
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                resolve();
+              });
+            });
+          });
+        });
+      });
+      
+      logs.push("Page stability ensured");
+    } catch (stabilityError) {
+      logs.push(`Page stability check failed: ${stabilityError} - continuing anyway`);
+    }
+  }
+
   try {
     // Launch browser
     result.logs.push("Launching browser...");
@@ -164,6 +260,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Clicking element: ${step.selector}`);
             await page.click(step.selector);
             result.logs.push(`Successfully clicked: ${step.selector}`);
+            
+            // Brief pause after click to allow for immediate visual feedback
+            await new Promise(resolve => setTimeout(resolve, 200));
             break;
           
           case "type":
@@ -184,17 +283,109 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Typing "${step.value}" into: ${step.selector}`);
             await page.type(step.selector, step.value);
             result.logs.push(`Successfully typed text into: ${step.selector}`);
+            
+            // Brief pause after typing to allow for visual updates (autocomplete, validation, etc.)
+            await new Promise(resolve => setTimeout(resolve, 300));
             break;
           
           case "wait":
             const waitTime = step.waitTime || 1000;
-            result.logs.push(`Waiting for ${waitTime}ms`);
+            result.logs.push(`Waiting for ${waitTime}ms and ensuring page stability`);
+            
+            // First wait for the specified time
             await new Promise(resolve => setTimeout(resolve, waitTime));
+            
+            // Additionally wait for network to be idle to ensure page is stable
+            try {
+              result.logs.push("Waiting for network to be idle...");
+              await page.waitForSelector('body', { timeout: 2000 }); // Ensure page has loaded
+              result.logs.push("Page body loaded, checking for network idle state...");
+              
+              // Wait for network idle by checking if no new requests are made for 500ms
+              await new Promise<void>((resolve) => {
+                let timeoutId: NodeJS.Timeout;
+                let requestCount = 0;
+                const startTime = Date.now();
+                const maxWaitTime = 5000; // Maximum 5 seconds wait
+                
+                const onRequest = () => {
+                  requestCount++;
+                  clearTimeout(timeoutId);
+                  
+                  timeoutId = setTimeout(() => {
+                    page.off('request', onRequest);
+                    page.off('response', onResponse);
+                    resolve();
+                  }, 500); // No requests for 500ms = idle
+                };
+                
+                const onResponse = () => {
+                  // Reset timer on response
+                  clearTimeout(timeoutId);
+                  timeoutId = setTimeout(() => {
+                    page.off('request', onRequest);
+                    page.off('response', onResponse);
+                    resolve();
+                  }, 500);
+                };
+                
+                page.on('request', onRequest);
+                page.on('response', onResponse);
+                
+                // Start initial timer
+                timeoutId = setTimeout(() => {
+                  page.off('request', onRequest);
+                  page.off('response', onResponse);
+                  resolve();
+                }, 500);
+                
+                // Safety timeout
+                setTimeout(() => {
+                  page.off('request', onRequest);
+                  page.off('response', onResponse);
+                  clearTimeout(timeoutId);
+                  resolve();
+                }, maxWaitTime);
+              });
+              
+              result.logs.push("Network appears to be idle");
+            } catch (networkError) {
+              result.logs.push(`Network idle check failed: ${networkError} - continuing anyway`);
+            }
+            
+            // Wait for any pending DOM updates
+            await page.evaluate(() => {
+              return new Promise<void>((resolve) => {
+                if (document.readyState === 'complete') {
+                  // Use requestAnimationFrame to wait for any pending renders
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      resolve();
+                    });
+                  });
+                } else {
+                  document.addEventListener('DOMContentLoaded', () => {
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        resolve();
+                      });
+                    });
+                  });
+                }
+              });
+            });
+            
+            result.logs.push("Page stability checks completed");
             break;
           
           case "screenshot":
             result.logs.push("Taking manual screenshot");
-            const screenshotBuffer = await page.screenshot({ fullPage: true });
+            await ensurePageStability(page, result.logs, step.stabilityTimeout);
+            const screenshotBuffer = await page.screenshot({ 
+              fullPage: true,
+              type: 'png',
+              clip: undefined // Let it capture the full page
+            });
             const { url: screenshotUrl, id: screenshotId } = await saveScreenshot(screenshotBuffer, `manual_screenshot_${Date.now()}.png`, executionId, i + 1);
             result.screenshots.push(screenshotUrl);
             stepResult.screenshot = screenshotUrl;
@@ -231,7 +422,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.evaluate(() => {
               window.scrollBy(0, window.innerHeight);
             });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for scroll animations and any lazy-loaded content
+            await new Promise(resolve => setTimeout(resolve, 800));
+            result.logs.push("Scroll completed");
             break;
           
           case "select_dropdown":
@@ -241,13 +434,22 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             result.logs.push(`Selecting "${step.value}" from dropdown: ${step.selector}`);
             await page.waitForSelector(step.selector, { timeout: 10000 });
             await page.select(step.selector, step.value);
+            result.logs.push(`Successfully selected "${step.value}" from dropdown`);
+            
+            // Brief pause after selection to allow for change events and visual updates
+            await new Promise(resolve => setTimeout(resolve, 300));
             break;
         }
 
         // Capture a screenshot after every step (except for the screenshot action itself)
         if (step.action !== "screenshot") {
           result.logs.push(`Capturing screenshot after step ${i + 1}`);
-          const autoScreenshotBuffer = await page.screenshot({ fullPage: true });
+          await ensurePageStability(page, result.logs, step.stabilityTimeout);
+          const autoScreenshotBuffer = await page.screenshot({ 
+            fullPage: true,
+            type: 'png',
+            clip: undefined // Let it capture the full page
+          });
           const { url: autoScreenshotUrl, id: autoScreenshotId } = await saveScreenshot(autoScreenshotBuffer, `step_${i + 1}_${Date.now()}.png`, executionId, i + 1);
           result.screenshots.push(autoScreenshotUrl);
           stepResult.screenshot = autoScreenshotUrl;
@@ -267,7 +469,12 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
         // Still try to capture a screenshot on error
         try {
           result.logs.push(`Capturing error screenshot for step ${i + 1}`);
-          const errorScreenshotBuffer = await page.screenshot({ fullPage: true });
+          await ensurePageStability(page, result.logs, step.stabilityTimeout);
+          const errorScreenshotBuffer = await page.screenshot({ 
+            fullPage: true,
+            type: 'png',
+            clip: undefined
+          });
           const { url: errorScreenshotUrl, id: errorScreenshotId } = await saveScreenshot(errorScreenshotBuffer, `error_step_${i + 1}_${Date.now()}.png`, executionId, i + 1);
           stepResult.screenshot = errorScreenshotUrl;
           stepResult.screenshotId = errorScreenshotId;

@@ -18,6 +18,7 @@ export interface AutomationStep {
   selectorType?: SelectorType;
   value?: string;
   waitTime?: number;
+  stabilityTimeout?: number; // Optional timeout for page stability checks (in ms)
   description?: string;
 }
 
