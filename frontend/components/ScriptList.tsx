@@ -82,66 +82,71 @@ export function ScriptList() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {scripts.map((script) => (
-          <Card key={script.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{script.name}</CardTitle>
-                  {script.description && (
-                    <CardDescription className="mt-1">
-                      {script.description}
-                    </CardDescription>
-                  )}
+        {scripts.map((script) => {
+          // Ensure steps is always an array
+          const steps = Array.isArray(script.steps) ? script.steps : [];
+          
+          return (
+            <Card key={script.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{script.name}</CardTitle>
+                    {script.description && (
+                      <CardDescription className="mt-1">
+                        {script.description}
+                      </CardDescription>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center text-sm text-gray-500">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {formatDistanceToNow(new Date(script.updatedAt), { addSuffix: true })}
-                </div>
-                
-                <div className="text-sm text-gray-600">
-                  {script.steps.length} step{script.steps.length !== 1 ? 's' : ''}
-                </div>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {formatDistanceToNow(new Date(script.updatedAt), { addSuffix: true })}
+                  </div>
+                  
+                  <div className="text-sm text-gray-600">
+                    {steps.length} step{steps.length !== 1 ? 's' : ''}
+                  </div>
 
-                <div className="flex space-x-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleExecute(script.id, script.name)}
-                    className="flex-1"
-                  >
-                    <Play className="h-4 w-4 mr-1" />
-                    Run
-                  </Button>
-                  
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/scripts/${script.id}`}>
-                      View
-                    </Link>
-                  </Button>
-                  
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/scripts/${script.id}/edit`}>
-                      <Edit className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(script.id, script.name)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleExecute(script.id, script.name)}
+                      className="flex-1"
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Run
+                    </Button>
+                    
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/scripts/${script.id}`}>
+                        View
+                      </Link>
+                    </Button>
+                    
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/scripts/${script.id}/edit`}>
+                        <Edit className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(script.id, script.name)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

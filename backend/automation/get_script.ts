@@ -23,7 +23,7 @@ export const getScript = api<GetScriptParams, GetScriptResponse>(
       id: number;
       name: string;
       description: string | null;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
       created_at: Date;
       updated_at: Date;
     }>`
@@ -36,11 +36,23 @@ export const getScript = api<GetScriptParams, GetScriptResponse>(
       throw APIError.notFound("Script not found");
     }
 
+    // Parse steps if they come as a string
+    let parsedSteps: AutomationStep[];
+    if (typeof script.steps === 'string') {
+      try {
+        parsedSteps = JSON.parse(script.steps);
+      } catch (error) {
+        parsedSteps = [];
+      }
+    } else {
+      parsedSteps = script.steps || [];
+    }
+
     return {
       id: script.id,
       name: script.name,
       description: script.description || undefined,
-      steps: script.steps,
+      steps: parsedSteps,
       createdAt: script.created_at,
       updatedAt: script.updated_at,
     };

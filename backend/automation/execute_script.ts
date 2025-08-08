@@ -17,7 +17,7 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
   async (params) => {
     const script = await automationDB.queryRow<{
       id: number;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
     }>`
       SELECT id, steps
       FROM scripts
@@ -26,6 +26,18 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
 
     if (!script) {
       throw APIError.notFound("Script not found");
+    }
+
+    // Parse steps if they come as a string
+    let parsedSteps: AutomationStep[];
+    if (typeof script.steps === 'string') {
+      try {
+        parsedSteps = JSON.parse(script.steps);
+      } catch (error) {
+        parsedSteps = [];
+      }
+    } else {
+      parsedSteps = script.steps || [];
     }
 
     const execution = await automationDB.queryRow<{ id: number }>`
@@ -39,7 +51,7 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
     }
 
     // Execute the script asynchronously
-    executeScriptAsync(execution.id, script.steps);
+    executeScriptAsync(execution.id, parsedSteps);
 
     return {
       executionId: execution.id,

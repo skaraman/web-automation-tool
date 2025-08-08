@@ -29,7 +29,7 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       id: number;
       name: string;
       description: string | null;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
     }>`
       SELECT id, name, description, steps
       FROM scripts
@@ -40,12 +40,24 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       throw APIError.notFound("Script not found");
     }
 
+    // Parse existing steps if they come as a string
+    let existingSteps: AutomationStep[];
+    if (typeof existing.steps === 'string') {
+      try {
+        existingSteps = JSON.parse(existing.steps);
+      } catch (error) {
+        existingSteps = [];
+      }
+    } else {
+      existingSteps = existing.steps || [];
+    }
+
     const now = new Date();
     const updatedScript = await automationDB.queryRow<{
       id: number;
       name: string;
       description: string | null;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
       created_at: Date;
       updated_at: Date;
     }>`
@@ -53,7 +65,7 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       SET 
         name = ${req.name ?? existing.name},
         description = ${req.description !== undefined ? req.description : existing.description},
-        steps = ${req.steps ? JSON.stringify(req.steps) : JSON.stringify(existing.steps)},
+        steps = ${req.steps ? JSON.stringify(req.steps) : JSON.stringify(existingSteps)},
         updated_at = ${now}
       WHERE id = ${req.id}
       RETURNING id, name, description, steps, created_at, updated_at
@@ -63,11 +75,23 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       throw new Error("Failed to update script");
     }
 
+    // Parse steps if they come as a string
+    let parsedSteps: AutomationStep[];
+    if (typeof updatedScript.steps === 'string') {
+      try {
+        parsedSteps = JSON.parse(updatedScript.steps);
+      } catch (error) {
+        parsedSteps = [];
+      }
+    } else {
+      parsedSteps = updatedScript.steps || [];
+    }
+
     return {
       id: updatedScript.id,
       name: updatedScript.name,
       description: updatedScript.description || undefined,
-      steps: updatedScript.steps,
+      steps: parsedSteps,
       createdAt: updatedScript.created_at,
       updatedAt: updatedScript.updated_at,
     };

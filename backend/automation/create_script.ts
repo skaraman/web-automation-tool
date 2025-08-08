@@ -26,7 +26,7 @@ export const createScript = api<CreateScriptRequest, CreateScriptResponse>(
       id: number;
       name: string;
       description: string | null;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
       created_at: Date;
       updated_at: Date;
     }>`
@@ -39,11 +39,23 @@ export const createScript = api<CreateScriptRequest, CreateScriptResponse>(
       throw new Error("Failed to create script");
     }
 
+    // Parse steps if they come as a string
+    let parsedSteps: AutomationStep[];
+    if (typeof result.steps === 'string') {
+      try {
+        parsedSteps = JSON.parse(result.steps);
+      } catch (error) {
+        parsedSteps = [];
+      }
+    } else {
+      parsedSteps = result.steps || [];
+    }
+
     return {
       id: result.id,
       name: result.name,
       description: result.description || undefined,
-      steps: result.steps,
+      steps: parsedSteps,
       createdAt: result.created_at,
       updatedAt: result.updated_at,
     };

@@ -57,6 +57,9 @@ export function ScriptDetail() {
     );
   }
 
+  // Ensure steps is always an array
+  const steps = Array.isArray(script.steps) ? script.steps : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -121,17 +124,17 @@ export function ScriptDetail() {
             <CardHeader>
               <CardTitle>Automation Steps</CardTitle>
               <CardDescription>
-                {script.steps.length} step{script.steps.length !== 1 ? 's' : ''} defined
+                {steps.length} step{steps.length !== 1 ? 's' : ''} defined
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {script.steps.length === 0 ? (
+              {steps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   No steps defined yet.
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {script.steps.map((step, index) => (
+                  {steps.map((step, index) => (
                     <div key={step.id} className="flex items-start space-x-3 p-3 border rounded-lg">
                       <Badge variant="outline" className="mt-0.5">
                         {index + 1}

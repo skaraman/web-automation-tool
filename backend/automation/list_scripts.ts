@@ -21,7 +21,7 @@ export const listScripts = api<void, ListScriptsResponse>(
       id: number;
       name: string;
       description: string | null;
-      steps: AutomationStep[];
+      steps: string | AutomationStep[];
       created_at: Date;
       updated_at: Date;
     }>`
@@ -31,14 +31,28 @@ export const listScripts = api<void, ListScriptsResponse>(
     `;
 
     return {
-      scripts: scripts.map(script => ({
-        id: script.id,
-        name: script.name,
-        description: script.description || undefined,
-        steps: script.steps,
-        createdAt: script.created_at,
-        updatedAt: script.updated_at,
-      })),
+      scripts: scripts.map(script => {
+        // Parse steps if they come as a string
+        let parsedSteps: AutomationStep[];
+        if (typeof script.steps === 'string') {
+          try {
+            parsedSteps = JSON.parse(script.steps);
+          } catch (error) {
+            parsedSteps = [];
+          }
+        } else {
+          parsedSteps = script.steps || [];
+        }
+
+        return {
+          id: script.id,
+          name: script.name,
+          description: script.description || undefined,
+          steps: parsedSteps,
+          createdAt: script.created_at,
+          updatedAt: script.updated_at,
+        };
+      }),
     };
   }
 );
