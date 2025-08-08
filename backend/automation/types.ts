@@ -46,6 +46,7 @@ export interface StepResult {
   description?: string;
   success: boolean;
   screenshot?: string;
+  screenshotId?: number;
   extractedData?: any;
   error?: string;
   timestamp: string;

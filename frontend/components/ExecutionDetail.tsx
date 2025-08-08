@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Clock, CheckCircle, XCircle, Loader, Camera, AlertCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle, XCircle, Loader, Camera, AlertCircle, ExternalLink, Download } from "lucide-react";
 import backend from "~backend/client";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -19,6 +19,12 @@ export function ExecutionDetail() {
       // Stop refetching if execution is completed or failed
       return data?.status === "running" ? 2000 : false;
     },
+  });
+
+  const { data: screenshots } = useQuery({
+    queryKey: ["screenshots", id],
+    queryFn: () => backend.automation.listScreenshots({ executionId: parseInt(id!) }),
+    enabled: Boolean(id) && execution?.status !== "running",
   });
 
   if (isLoading) {
@@ -136,7 +142,7 @@ export function ExecutionDetail() {
                 <CardTitle>Execution Results</CardTitle>
               </CardHeader>
               <CardContent>
-                <ExecutionResults result={execution.result} />
+                <ExecutionResults result={execution.result} screenshots={screenshots?.screenshots} />
               </CardContent>
             </Card>
           )}
@@ -170,9 +176,10 @@ export function ExecutionDetail() {
 
 interface ExecutionResultsProps {
   result: any;
+  screenshots?: any[];
 }
 
-function ExecutionResults({ result }: ExecutionResultsProps) {
+function ExecutionResults({ result, screenshots }: ExecutionResultsProps) {
   if (!result) return null;
 
   return (
@@ -199,10 +206,21 @@ function ExecutionResults({ result }: ExecutionResultsProps) {
       </TabsContent>
 
       <TabsContent value="screenshots" className="space-y-4">
-        {result.screenshots && result.screenshots.length > 0 ? (
+        {screenshots && screenshots.length > 0 ? (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600 mb-4">
+              {screenshots.length} screenshot{screenshots.length !== 1 ? 's' : ''} captured
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {screenshots.map((screenshot, index) => (
+                <ScreenshotCard key={screenshot.id} screenshot={screenshot} index={index} />
+              ))}
+            </div>
+          </div>
+        ) : result.screenshots && result.screenshots.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
             {result.screenshots.map((screenshot: string, index: number) => (
-              <ScreenshotCard key={index} screenshot={screenshot} index={index} />
+              <LegacyScreenshotCard key={index} screenshot={screenshot} index={index} />
             ))}
           </div>
         ) : (
@@ -247,12 +265,80 @@ function ExecutionResults({ result }: ExecutionResultsProps) {
 }
 
 interface ScreenshotCardProps {
-  screenshot: string;
+  screenshot: {
+    id: number;
+    stepNumber: number;
+    filename: string;
+    url: string;
+    createdAt: string;
+  };
   index: number;
 }
 
 function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
+  const screenshotUrl = `${window.location.origin}${screenshot.url}`;
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <Camera className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium">
+            Step {screenshot.stepNumber} Screenshot
+          </span>
+        </div>
+        <div className="flex space-x-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={screenshotUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3 w-3 mr-1" />
+              Open
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={screenshotUrl} download={screenshot.filename}>
+              <Download className="h-3 w-3 mr-1" />
+              Download
+            </a>
+          </Button>
+        </div>
+      </div>
+      
+      <div className="rounded-lg overflow-hidden border">
+        <img 
+          src={screenshotUrl} 
+          alt={`Step ${screenshot.stepNumber} screenshot`}
+          className="w-full h-auto max-h-64 object-contain bg-gray-50"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            const parent = target.parentElement;
+            if (parent) {
+              parent.innerHTML = `
+                <div class="bg-gray-100 rounded-lg p-8 text-center">
+                  <div class="text-sm text-gray-500">Failed to load screenshot</div>
+                  <div class="text-xs text-gray-400 mt-1">${screenshot.filename}</div>
+                </div>
+              `;
+            }
+          }}
+        />
+      </div>
+      
+      <div className="text-xs text-gray-500 mt-2">
+        {format(new Date(screenshot.createdAt), "PPpp")}
+      </div>
+    </div>
+  );
+}
+
+interface LegacyScreenshotCardProps {
+  screenshot: string;
+  index: number;
+}
+
+function LegacyScreenshotCard({ screenshot, index }: LegacyScreenshotCardProps) {
   const isValidUrl = screenshot.startsWith('http') && !screenshot.includes('failed_upload');
+  const isDataUrl = screenshot.startsWith('data:image');
 
   return (
     <div className="border rounded-lg p-4">
@@ -261,7 +347,7 @@ function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
           <Camera className="h-4 w-4 text-gray-500" />
           <span className="text-sm font-medium">Screenshot {index + 1}</span>
         </div>
-        {isValidUrl && (
+        {(isValidUrl || isDataUrl) && (
           <Button variant="outline" size="sm" asChild>
             <a href={screenshot} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3 w-3 mr-1" />
@@ -271,7 +357,7 @@ function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
         )}
       </div>
       
-      {isValidUrl ? (
+      {(isValidUrl || isDataUrl) ? (
         <div className="rounded-lg overflow-hidden border">
           <img 
             src={screenshot} 
@@ -317,7 +403,18 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
     );
   };
 
-  const isValidScreenshot = stepResult.screenshot && stepResult.screenshot.startsWith('http') && !stepResult.screenshot.includes('failed_upload');
+  const isValidScreenshot = stepResult.screenshot && (
+    stepResult.screenshot.startsWith('http') || 
+    stepResult.screenshot.startsWith('data:image') ||
+    stepResult.screenshot.startsWith('/api/')
+  ) && !stepResult.screenshot.includes('failed_upload');
+
+  const getScreenshotUrl = (screenshot: string) => {
+    if (screenshot.startsWith('/api/')) {
+      return `${window.location.origin}${screenshot}`;
+    }
+    return screenshot;
+  };
 
   return (
     <Card className={`border-l-4 ${stepResult.success ? 'border-l-green-500' : 'border-l-red-500'}`}>
@@ -356,19 +453,29 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
                 Screenshot
               </h5>
               {isValidScreenshot && (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={stepResult.screenshot} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    View Full
-                  </a>
-                </Button>
+                <div className="flex space-x-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={getScreenshotUrl(stepResult.screenshot)} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      View Full
+                    </a>
+                  </Button>
+                  {stepResult.screenshot.startsWith('/api/') && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={getScreenshotUrl(stepResult.screenshot)} download={`step_${stepNumber}_screenshot.png`}>
+                        <Download className="h-3 w-3 mr-1" />
+                        Download
+                      </a>
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             
             {isValidScreenshot ? (
               <div className="rounded-lg overflow-hidden border">
                 <img 
-                  src={stepResult.screenshot} 
+                  src={getScreenshotUrl(stepResult.screenshot)} 
                   alt={`Step ${stepNumber} screenshot`}
                   className="w-full h-auto max-h-48 object-contain bg-gray-50"
                   onError={(e) => {

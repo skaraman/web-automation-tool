@@ -64,7 +64,7 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
 
 async function executeScriptAsync(executionId: number, steps: AutomationStep[]) {
   try {
-    const result = await runAutomationSteps(steps);
+    const result = await runAutomationSteps(steps, executionId);
     
     await automationDB.exec`
       UPDATE executions
@@ -86,12 +86,13 @@ interface StepResult {
   description?: string;
   success: boolean;
   screenshot?: string;
+  screenshotId?: number;
   extractedData?: any;
   error?: string;
   timestamp: string;
 }
 
-async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionResult> {
+async function runAutomationSteps(steps: AutomationStep[], executionId: number): Promise<ExecutionResult> {
   const result: ExecutionResult = {
     success: true,
     screenshots: [],
@@ -116,12 +117,18 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
         '--no-first-run',
         '--no-zygote',
         '--single-process',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
       ]
     });
 
     page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
+    
+    // Set user agent to avoid bot detection
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    
     result.logs.push("Browser launched successfully");
 
     // Execute each step
@@ -145,25 +152,38 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
             }
             result.logs.push(`Navigating to: ${step.value}`);
             await page.goto(step.value, { waitUntil: 'networkidle2', timeout: 30000 });
+            result.logs.push(`Successfully navigated to: ${step.value}`);
             break;
           
           case "click":
             if (!step.selector) {
               throw new Error("Selector is required for click action");
             }
-            result.logs.push(`Clicking element: ${step.selector}`);
+            result.logs.push(`Waiting for element: ${step.selector}`);
             await page.waitForSelector(step.selector, { timeout: 10000 });
+            result.logs.push(`Clicking element: ${step.selector}`);
             await page.click(step.selector);
+            result.logs.push(`Successfully clicked: ${step.selector}`);
             break;
           
           case "type":
             if (!step.selector || !step.value) {
               throw new Error("Selector and value are required for type action");
             }
-            result.logs.push(`Typing "${step.value}" into element: ${step.selector}`);
+            result.logs.push(`Waiting for input field: ${step.selector}`);
             await page.waitForSelector(step.selector, { timeout: 10000 });
+            result.logs.push(`Focusing on: ${step.selector}`);
             await page.focus(step.selector);
-            await page.keyboard.type(step.value);
+            result.logs.push(`Clearing existing text in: ${step.selector}`);
+            await page.evaluate((selector) => {
+              const element = document.querySelector(selector) as HTMLInputElement;
+              if (element) {
+                element.value = '';
+              }
+            }, step.selector);
+            result.logs.push(`Typing "${step.value}" into: ${step.selector}`);
+            await page.type(step.selector, step.value);
+            result.logs.push(`Successfully typed text into: ${step.selector}`);
             break;
           
           case "wait":
@@ -173,11 +193,13 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
             break;
           
           case "screenshot":
-            result.logs.push("Taking screenshot");
+            result.logs.push("Taking manual screenshot");
             const screenshotBuffer = await page.screenshot({ fullPage: true });
-            const screenshotUrl = await uploadScreenshot(screenshotBuffer, `manual_screenshot_${Date.now()}.png`);
+            const { url: screenshotUrl, id: screenshotId } = await saveScreenshot(screenshotBuffer, `manual_screenshot_${Date.now()}.png`, executionId, i + 1);
             result.screenshots.push(screenshotUrl);
             stepResult.screenshot = screenshotUrl;
+            stepResult.screenshotId = screenshotId;
+            result.logs.push(`Screenshot saved: ${screenshotUrl}`);
             break;
           
           case "extract_text":
@@ -189,6 +211,7 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
             const extractedText = await page.$eval(step.selector, el => el.textContent?.trim() || '');
             result.extractedData[step.id] = extractedText;
             stepResult.extractedData = extractedText;
+            result.logs.push(`Extracted text: "${extractedText}"`);
             break;
           
           case "extract_attribute":
@@ -200,6 +223,7 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
             const extractedAttr = await page.$eval(step.selector, (el, attr) => el.getAttribute(attr), step.value);
             result.extractedData[step.id] = extractedAttr;
             stepResult.extractedData = extractedAttr;
+            result.logs.push(`Extracted attribute: "${extractedAttr}"`);
             break;
           
           case "scroll":
@@ -222,15 +246,17 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
 
         // Capture a screenshot after every step (except for the screenshot action itself)
         if (step.action !== "screenshot") {
+          result.logs.push(`Capturing screenshot after step ${i + 1}`);
           const autoScreenshotBuffer = await page.screenshot({ fullPage: true });
-          const autoScreenshotUrl = await uploadScreenshot(autoScreenshotBuffer, `step_${i + 1}_${Date.now()}.png`);
+          const { url: autoScreenshotUrl, id: autoScreenshotId } = await saveScreenshot(autoScreenshotBuffer, `step_${i + 1}_${Date.now()}.png`, executionId, i + 1);
           result.screenshots.push(autoScreenshotUrl);
           stepResult.screenshot = autoScreenshotUrl;
-          result.logs.push(`Screenshot captured after step ${i + 1}`);
+          stepResult.screenshotId = autoScreenshotId;
+          result.logs.push(`Screenshot captured and saved: ${autoScreenshotUrl}`);
         }
 
         // Small delay between steps for stability
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
         stepResult.success = false;
@@ -240,10 +266,13 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
         
         // Still try to capture a screenshot on error
         try {
+          result.logs.push(`Capturing error screenshot for step ${i + 1}`);
           const errorScreenshotBuffer = await page.screenshot({ fullPage: true });
-          const errorScreenshotUrl = await uploadScreenshot(errorScreenshotBuffer, `error_step_${i + 1}_${Date.now()}.png`);
+          const { url: errorScreenshotUrl, id: errorScreenshotId } = await saveScreenshot(errorScreenshotBuffer, `error_step_${i + 1}_${Date.now()}.png`, executionId, i + 1);
           stepResult.screenshot = errorScreenshotUrl;
+          stepResult.screenshotId = errorScreenshotId;
           result.screenshots.push(errorScreenshotUrl);
+          result.logs.push(`Error screenshot saved: ${errorScreenshotUrl}`);
         } catch (screenshotError) {
           result.logs.push(`Failed to capture error screenshot: ${screenshotError}`);
         }
@@ -261,11 +290,12 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
     try {
       if (page) {
         await page.close();
+        result.logs.push("Page closed");
       }
       if (browser) {
         await browser.close();
+        result.logs.push("Browser closed successfully");
       }
-      result.logs.push("Browser closed successfully");
     } catch (cleanupError) {
       result.logs.push(`Browser cleanup error: ${cleanupError}`);
     }
@@ -274,14 +304,36 @@ async function runAutomationSteps(steps: AutomationStep[]): Promise<ExecutionRes
   return result;
 }
 
-async function uploadScreenshot(buffer: Buffer, filename: string): Promise<string> {
+async function saveScreenshot(buffer: Buffer, filename: string, executionId: number, stepNumber: number): Promise<{ url: string; id: number }> {
   try {
-    await screenshotBucket.upload(filename, buffer, {
-      contentType: 'image/png'
-    });
-    return screenshotBucket.publicUrl(filename);
+    // First, try to save to database
+    const screenshotRecord = await automationDB.queryRow<{ id: number }>`
+      INSERT INTO screenshots (execution_id, step_number, filename, data, content_type)
+      VALUES (${executionId}, ${stepNumber}, ${filename}, ${buffer}, 'image/png')
+      RETURNING id
+    `;
+
+    if (!screenshotRecord) {
+      throw new Error("Failed to save screenshot to database");
+    }
+
+    // Try to upload to object storage as well (fallback)
+    try {
+      await screenshotBucket.upload(filename, buffer, {
+        contentType: 'image/png'
+      });
+      const publicUrl = screenshotBucket.publicUrl(filename);
+      return { url: publicUrl, id: screenshotRecord.id };
+    } catch (bucketError) {
+      console.error('Failed to upload to bucket, using database URL:', bucketError);
+      // Return database URL as fallback
+      return { url: `/api/automation/screenshots/${screenshotRecord.id}`, id: screenshotRecord.id };
+    }
+
   } catch (error) {
-    console.error('Failed to upload screenshot:', error);
-    return `failed_upload_${filename}`;
+    console.error('Failed to save screenshot:', error);
+    // Return a base64 data URL as last resort
+    const base64 = buffer.toString('base64');
+    return { url: `data:image/png;base64,${base64}`, id: -1 };
   }
 }
