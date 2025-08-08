@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Play, Edit, Trash2, Clock } from "lucide-react";
+import { Play, Edit, Trash2, Clock, TestTube } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import backend from "~backend/client";
 import { formatDistanceToNow } from "date-fns";
@@ -53,6 +53,55 @@ export function ScriptList() {
     }
   };
 
+  const createTestScript = async () => {
+    try {
+      const testScript = await backend.automation.createScript({
+        name: "Screenshot Test - Google Homepage",
+        description: "Simple test to verify screenshot functionality by visiting Google",
+        steps: [
+          {
+            id: "step_1",
+            action: "navigate",
+            value: "https://www.google.com",
+            description: "Navigate to Google homepage"
+          },
+          {
+            id: "step_2",
+            action: "wait",
+            waitTime: 2000,
+            description: "Wait for page to load"
+          },
+          {
+            id: "step_3",
+            action: "screenshot",
+            description: "Take screenshot of Google homepage"
+          }
+        ]
+      });
+
+      toast({
+        title: "Test script created",
+        description: "Screenshot test script created successfully. Click Run to test!",
+      });
+
+      // Automatically execute the test script
+      const result = await backend.automation.executeScript({ id: testScript.id });
+      toast({
+        title: "Test execution started",
+        description: `Screenshot test is running. Execution ID: ${result.executionId}`,
+      });
+
+      refetch();
+    } catch (error) {
+      console.error("Failed to create test script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create test script. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -67,9 +116,16 @@ export function ScriptList() {
     return (
       <div className="text-center py-12">
         <div className="text-gray-500 mb-4">No automation scripts found</div>
-        <Button asChild>
-          <Link to="/scripts/new">Create your first script</Link>
-        </Button>
+        <div className="space-y-3">
+          <Button asChild>
+            <Link to="/scripts/new">Create your first script</Link>
+          </Button>
+          <div className="text-sm text-gray-400">or</div>
+          <Button variant="outline" onClick={createTestScript}>
+            <TestTube className="h-4 w-4 mr-2" />
+            Create Screenshot Test
+          </Button>
+        </div>
       </div>
     );
   }
@@ -77,8 +133,14 @@ export function ScriptList() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Automation Scripts</h2>
-        <Badge variant="secondary">{scripts.length} scripts</Badge>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Automation Scripts</h2>
+          <Badge variant="secondary">{scripts.length} scripts</Badge>
+        </div>
+        <Button variant="outline" onClick={createTestScript}>
+          <TestTube className="h-4 w-4 mr-2" />
+          Create Screenshot Test
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
