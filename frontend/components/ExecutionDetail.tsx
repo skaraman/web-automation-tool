@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Clock, CheckCircle, XCircle, Loader, Camera, AlertCircle } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle, XCircle, Loader, Camera, AlertCircle, ExternalLink } from "lucide-react";
 import backend from "~backend/client";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -202,19 +202,7 @@ function ExecutionResults({ result }: ExecutionResultsProps) {
         {result.screenshots && result.screenshots.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
             {result.screenshots.map((screenshot: string, index: number) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Camera className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm font-medium">Screenshot {index + 1}</span>
-                </div>
-                <div className="bg-gray-100 rounded-lg p-8 text-center">
-                  <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <div className="text-sm text-gray-500">{screenshot}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    Mock screenshot placeholder
-                  </div>
-                </div>
-              </div>
+              <ScreenshotCard key={index} screenshot={screenshot} index={index} />
             ))}
           </div>
         ) : (
@@ -258,6 +246,63 @@ function ExecutionResults({ result }: ExecutionResultsProps) {
   );
 }
 
+interface ScreenshotCardProps {
+  screenshot: string;
+  index: number;
+}
+
+function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
+  const isValidUrl = screenshot.startsWith('http') && !screenshot.includes('failed_upload');
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <Camera className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium">Screenshot {index + 1}</span>
+        </div>
+        {isValidUrl && (
+          <Button variant="outline" size="sm" asChild>
+            <a href={screenshot} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3 w-3 mr-1" />
+              Open
+            </a>
+          </Button>
+        )}
+      </div>
+      
+      {isValidUrl ? (
+        <div className="rounded-lg overflow-hidden border">
+          <img 
+            src={screenshot} 
+            alt={`Screenshot ${index + 1}`}
+            className="w-full h-auto max-h-64 object-contain bg-gray-50"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                parent.innerHTML = `
+                  <div class="bg-gray-100 rounded-lg p-8 text-center">
+                    <div class="text-sm text-gray-500">Failed to load screenshot</div>
+                    <div class="text-xs text-gray-400 mt-1">${screenshot}</div>
+                  </div>
+                `;
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <div className="bg-gray-100 rounded-lg p-8 text-center">
+          <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+          <div className="text-sm text-gray-500">Screenshot unavailable</div>
+          <div className="text-xs text-gray-400 mt-1">{screenshot}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface StepResultCardProps {
   stepResult: any;
   stepNumber: number;
@@ -271,6 +316,8 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
       <XCircle className="h-5 w-5 text-red-600" />
     );
   };
+
+  const isValidScreenshot = stepResult.screenshot && stepResult.screenshot.startsWith('http') && !stepResult.screenshot.includes('failed_upload');
 
   return (
     <Card className={`border-l-4 ${stepResult.success ? 'border-l-green-500' : 'border-l-red-500'}`}>
@@ -303,17 +350,47 @@ function StepResultCard({ stepResult, stepNumber }: StepResultCardProps) {
 
         {stepResult.screenshot && (
           <div>
-            <h5 className="text-sm font-medium text-gray-900 mb-2 flex items-center">
-              <Camera className="h-4 w-4 mr-1" />
-              Screenshot
-            </h5>
-            <div className="bg-gray-100 rounded-lg p-6 text-center">
-              <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <div className="text-sm text-gray-500">{stepResult.screenshot}</div>
-              <div className="text-xs text-gray-400 mt-1">
-                Mock screenshot placeholder
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium text-gray-900 flex items-center">
+                <Camera className="h-4 w-4 mr-1" />
+                Screenshot
+              </h5>
+              {isValidScreenshot && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={stepResult.screenshot} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    View Full
+                  </a>
+                </Button>
+              )}
             </div>
+            
+            {isValidScreenshot ? (
+              <div className="rounded-lg overflow-hidden border">
+                <img 
+                  src={stepResult.screenshot} 
+                  alt={`Step ${stepNumber} screenshot`}
+                  className="w-full h-auto max-h-48 object-contain bg-gray-50"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="bg-gray-100 rounded-lg p-6 text-center">
+                          <div class="text-sm text-gray-500">Failed to load screenshot</div>
+                        </div>
+                      `;
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded-lg p-6 text-center">
+                <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <div className="text-sm text-gray-500">Screenshot unavailable</div>
+              </div>
+            )}
           </div>
         )}
 
