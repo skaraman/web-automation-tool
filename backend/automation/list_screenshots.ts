@@ -15,7 +15,6 @@ export interface ListScreenshotsResponse {
   }[];
 }
 
-// Lists all screenshots for an execution.
 export const listScreenshots = api<ListScreenshotsParams, ListScreenshotsResponse>(
   { expose: true, method: "GET", path: "/executions/:executionId/screenshots" },
   async (params) => {

@@ -21,14 +21,12 @@ export interface ListAllScreenshotsResponse {
   total: number;
 }
 
-// Lists all screenshots across all executions with pagination.
 export const listAllScreenshots = api<ListAllScreenshotsParams, ListAllScreenshotsResponse>(
   { expose: true, method: "GET", path: "/screenshots" },
   async (params) => {
     const limit = params.limit || 50;
     const offset = params.offset || 0;
 
-    // Get total count
     const countResult = await automationDB.queryRow<{ count: number }>`
       SELECT COUNT(*) as count
       FROM screenshots s
@@ -38,7 +36,6 @@ export const listAllScreenshots = api<ListAllScreenshotsParams, ListAllScreensho
 
     const total = countResult?.count || 0;
 
-    // Get screenshots with pagination
     const screenshots = await automationDB.rawQueryAll<{
       id: number;
       execution_id: number;

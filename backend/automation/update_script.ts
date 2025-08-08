@@ -21,7 +21,6 @@ export interface UpdateScriptResponse {
   updatedAt: Date;
 }
 
-// Updates an existing automation script.
 export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, UpdateScriptResponse>(
   { expose: true, method: "PUT", path: "/scripts/:id" },
   async (req) => {
@@ -40,7 +39,6 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       throw APIError.notFound("Script not found");
     }
 
-    // Parse existing steps if they come as a string
     let existingSteps: AutomationStep[];
     if (typeof existing.steps === 'string') {
       try {
@@ -75,7 +73,6 @@ export const updateScript = api<UpdateScriptParams & UpdateScriptRequest, Update
       throw new Error("Failed to update script");
     }
 
-    // Parse steps if they come as a string
     let parsedSteps: AutomationStep[];
     if (typeof updatedScript.steps === 'string') {
       try {

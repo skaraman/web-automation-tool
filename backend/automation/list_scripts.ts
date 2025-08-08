@@ -13,7 +13,6 @@ export interface ListScriptsResponse {
   }[];
 }
 
-// Retrieves all automation scripts.
 export const listScripts = api<void, ListScriptsResponse>(
   { expose: true, method: "GET", path: "/scripts" },
   async () => {
@@ -32,7 +31,6 @@ export const listScripts = api<void, ListScriptsResponse>(
 
     return {
       scripts: scripts.map(script => {
-        // Parse steps if they come as a string
         let parsedSteps: AutomationStep[];
         if (typeof script.steps === 'string') {
           try {

@@ -15,7 +15,6 @@ export interface GetScriptResponse {
   updatedAt: Date;
 }
 
-// Retrieves a specific automation script by ID.
 export const getScript = api<GetScriptParams, GetScriptResponse>(
   { expose: true, method: "GET", path: "/scripts/:id" },
   async (params) => {
@@ -36,7 +35,6 @@ export const getScript = api<GetScriptParams, GetScriptResponse>(
       throw APIError.notFound("Script not found");
     }
 
-    // Parse steps if they come as a string
     let parsedSteps: AutomationStep[];
     if (typeof script.steps === 'string') {
       try {

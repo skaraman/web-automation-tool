@@ -13,7 +13,6 @@ export interface ExecuteScriptResponse {
   status: "running";
 }
 
-// Executes an automation script.
 export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
   { expose: true, method: "POST", path: "/scripts/:id/execute" },
   async (params) => {
@@ -30,7 +29,6 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
       throw APIError.notFound("Script not found");
     }
 
-    // Parse steps if they come as a string
     let parsedSteps: AutomationStep[];
     if (typeof script.steps === 'string') {
       try {
@@ -52,7 +50,6 @@ export const executeScript = api<ExecuteScriptParams, ExecuteScriptResponse>(
       throw new Error("Failed to create execution");
     }
 
-    // Execute the script asynchronously
     executeScriptAsync(execution.id, parsedSteps);
 
     return {
@@ -104,15 +101,13 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
   let browser: Browser | null = null;
   let page: Page | null = null;
 
-  // Helper function to ensure page stability before screenshots
   async function ensurePageStability(page: Page, logs: string[], stabilityTimeout: number = 3000): Promise<void> {
     try {
       logs.push("Ensuring page stability before screenshot...");
       
-      // Wait for any pending network requests using a simplified approach
       await new Promise<void>((resolve) => {
         let timeoutId: NodeJS.Timeout;
-        const maxWaitTime = Math.min(stabilityTimeout, 5000); // Cap at 5 seconds, use configured timeout
+        const maxWaitTime = Math.min(stabilityTimeout, 5000);
         
         const onRequest = () => {
           clearTimeout(timeoutId);
@@ -120,7 +115,7 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             page.off('request', onRequest);
             page.off('response', onResponse);
             resolve();
-          }, 300); // No requests for 300ms = idle
+          }, 300);
         };
         
         const onResponse = () => {
@@ -135,14 +130,12 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
         page.on('request', onRequest);
         page.on('response', onResponse);
         
-        // Start initial timer
         timeoutId = setTimeout(() => {
           page.off('request', onRequest);
           page.off('response', onResponse);
           resolve();
         }, 300);
         
-        // Safety timeout
         setTimeout(() => {
           page.off('request', onRequest);
           page.off('response', onResponse);
@@ -151,10 +144,8 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
         }, maxWaitTime);
       });
       
-      // Wait for any animations or transitions to complete
       await page.evaluate(() => {
         return new Promise<void>((resolve) => {
-          // Wait for any CSS transitions/animations
           const animationPromises: Promise<void>[] = [];
           
           document.querySelectorAll('*').forEach(element => {
@@ -179,12 +170,10 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             }
           });
           
-          // Wait for all animations to complete, or timeout after 2 seconds
           Promise.race([
             Promise.all(animationPromises),
             new Promise<void>((timeoutResolve) => setTimeout(() => timeoutResolve(), 2000))
           ]).then(() => {
-            // Additional frame wait for visual stability
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 resolve();
@@ -201,7 +190,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
   }
 
   try {
-    // Launch browser
     result.logs.push("Launching browser...");
     browser = await puppeteer.launch({
       headless: true,
@@ -222,12 +210,10 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
     page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
     
-    // Set user agent to avoid bot detection
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
     result.logs.push("Browser launched successfully");
 
-    // Execute each step
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
       const stepResult: StepResult = {
@@ -261,7 +247,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.click(step.selector);
             result.logs.push(`Successfully clicked: ${step.selector}`);
             
-            // Brief pause after click to allow for immediate visual feedback
             await new Promise(resolve => setTimeout(resolve, 200));
             break;
           
@@ -284,7 +269,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.type(step.selector, step.value);
             result.logs.push(`Successfully typed text into: ${step.selector}`);
             
-            // Brief pause after typing to allow for visual updates (autocomplete, validation, etc.)
             await new Promise(resolve => setTimeout(resolve, 300));
             break;
           
@@ -292,21 +276,18 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             const waitTime = step.waitTime || 1000;
             result.logs.push(`Waiting for ${waitTime}ms and ensuring page stability`);
             
-            // First wait for the specified time
             await new Promise(resolve => setTimeout(resolve, waitTime));
             
-            // Additionally wait for network to be idle to ensure page is stable
             try {
               result.logs.push("Waiting for network to be idle...");
-              await page.waitForSelector('body', { timeout: 2000 }); // Ensure page has loaded
+              await page.waitForSelector('body', { timeout: 2000 });
               result.logs.push("Page body loaded, checking for network idle state...");
               
-              // Wait for network idle by checking if no new requests are made for 500ms
               await new Promise<void>((resolve) => {
                 let timeoutId: NodeJS.Timeout;
                 let requestCount = 0;
                 const startTime = Date.now();
-                const maxWaitTime = 5000; // Maximum 5 seconds wait
+                const maxWaitTime = 5000;
                 
                 const onRequest = () => {
                   requestCount++;
@@ -316,11 +297,10 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
                     page.off('request', onRequest);
                     page.off('response', onResponse);
                     resolve();
-                  }, 500); // No requests for 500ms = idle
+                  }, 500);
                 };
                 
                 const onResponse = () => {
-                  // Reset timer on response
                   clearTimeout(timeoutId);
                   timeoutId = setTimeout(() => {
                     page.off('request', onRequest);
@@ -332,14 +312,12 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
                 page.on('request', onRequest);
                 page.on('response', onResponse);
                 
-                // Start initial timer
                 timeoutId = setTimeout(() => {
                   page.off('request', onRequest);
                   page.off('response', onResponse);
                   resolve();
                 }, 500);
                 
-                // Safety timeout
                 setTimeout(() => {
                   page.off('request', onRequest);
                   page.off('response', onResponse);
@@ -353,11 +331,9 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
               result.logs.push(`Network idle check failed: ${networkError} - continuing anyway`);
             }
             
-            // Wait for any pending DOM updates
             await page.evaluate(() => {
               return new Promise<void>((resolve) => {
                 if (document.readyState === 'complete') {
-                  // Use requestAnimationFrame to wait for any pending renders
                   requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                       resolve();
@@ -384,7 +360,7 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             const screenshotBuffer = await page.screenshot({ 
               fullPage: true,
               type: 'png',
-              clip: undefined // Let it capture the full page
+              clip: undefined
             });
             const { url: screenshotUrl, id: screenshotId } = await saveScreenshot(screenshotBuffer, `manual_screenshot_${Date.now()}.png`, executionId, i + 1);
             result.screenshots.push(screenshotUrl);
@@ -422,7 +398,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.evaluate(() => {
               window.scrollBy(0, window.innerHeight);
             });
-            // Wait for scroll animations and any lazy-loaded content
             await new Promise(resolve => setTimeout(resolve, 800));
             result.logs.push("Scroll completed");
             break;
@@ -436,19 +411,17 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
             await page.select(step.selector, step.value);
             result.logs.push(`Successfully selected "${step.value}" from dropdown`);
             
-            // Brief pause after selection to allow for change events and visual updates
             await new Promise(resolve => setTimeout(resolve, 300));
             break;
         }
 
-        // Capture a screenshot after every step (except for the screenshot action itself)
         if (step.action !== "screenshot") {
           result.logs.push(`Capturing screenshot after step ${i + 1}`);
           await ensurePageStability(page, result.logs, step.stabilityTimeout);
           const autoScreenshotBuffer = await page.screenshot({ 
             fullPage: true,
             type: 'png',
-            clip: undefined // Let it capture the full page
+            clip: undefined
           });
           const { url: autoScreenshotUrl, id: autoScreenshotId } = await saveScreenshot(autoScreenshotBuffer, `step_${i + 1}_${Date.now()}.png`, executionId, i + 1);
           result.screenshots.push(autoScreenshotUrl);
@@ -457,7 +430,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
           result.logs.push(`Screenshot captured and saved: ${autoScreenshotUrl}`);
         }
 
-        // Small delay between steps for stability
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
@@ -466,7 +438,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
         result.logs.push(`Error in step ${i + 1}: ${stepResult.error}`);
         result.success = false;
         
-        // Still try to capture a screenshot on error
         try {
           result.logs.push(`Capturing error screenshot for step ${i + 1}`);
           await ensurePageStability(page, result.logs, step.stabilityTimeout);
@@ -493,7 +464,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
     result.error = error instanceof Error ? error.message : String(error);
     result.logs.push(`Browser execution failed: ${result.error}`);
   } finally {
-    // Clean up browser resources
     try {
       if (page) {
         await page.close();
@@ -513,7 +483,6 @@ async function runAutomationSteps(steps: AutomationStep[], executionId: number):
 
 async function saveScreenshot(buffer: Buffer, filename: string, executionId: number, stepNumber: number): Promise<{ url: string; id: number }> {
   try {
-    // First, try to save to database
     const screenshotRecord = await automationDB.queryRow<{ id: number }>`
       INSERT INTO screenshots (execution_id, step_number, filename, data, content_type)
       VALUES (${executionId}, ${stepNumber}, ${filename}, ${buffer}, 'image/png')
@@ -524,7 +493,6 @@ async function saveScreenshot(buffer: Buffer, filename: string, executionId: num
       throw new Error("Failed to save screenshot to database");
     }
 
-    // Try to upload to object storage as well (fallback)
     try {
       await screenshotBucket.upload(filename, buffer, {
         contentType: 'image/png'
@@ -533,13 +501,11 @@ async function saveScreenshot(buffer: Buffer, filename: string, executionId: num
       return { url: publicUrl, id: screenshotRecord.id };
     } catch (bucketError) {
       console.error('Failed to upload to bucket, using database URL:', bucketError);
-      // Return database URL as fallback
       return { url: `/api/automation/screenshots/${screenshotRecord.id}`, id: screenshotRecord.id };
     }
 
   } catch (error) {
     console.error('Failed to save screenshot:', error);
-    // Return a base64 data URL as last resort
     const base64 = buffer.toString('base64');
     return { url: `data:image/png;base64,${base64}`, id: -1 };
   }

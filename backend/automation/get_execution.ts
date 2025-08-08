@@ -15,7 +15,6 @@ export interface GetExecutionResponse {
   completedAt?: Date;
 }
 
-// Retrieves the status and result of a script execution.
 export const getExecution = api<GetExecutionParams, GetExecutionResponse>(
   { expose: true, method: "GET", path: "/executions/:id" },
   async (params) => {

@@ -9,14 +9,12 @@ export interface ClearExecutionsResponse {
   deletedCount: number;
 }
 
-// Clears execution history for a specific script or all scripts.
 export const clearExecutions = api<ClearExecutionsParams, ClearExecutionsResponse>(
   { expose: true, method: "DELETE", path: "/executions/clear" },
   async (params) => {
     let deletedCount = 0;
     
     if (params.scriptId) {
-      // Clear executions for a specific script
       const result = await automationDB.queryAll<{ id: number }>`
         DELETE FROM executions
         WHERE script_id = ${params.scriptId}
@@ -24,7 +22,6 @@ export const clearExecutions = api<ClearExecutionsParams, ClearExecutionsRespons
       `;
       deletedCount = result.length;
     } else {
-      // Clear all executions
       const result = await automationDB.queryAll<{ id: number }>`
         DELETE FROM executions
         RETURNING id

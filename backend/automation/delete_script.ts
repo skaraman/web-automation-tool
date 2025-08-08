@@ -5,7 +5,6 @@ export interface DeleteScriptParams {
   id: number;
 }
 
-// Deletes an automation script.
 export const deleteScript = api<DeleteScriptParams, void>(
   { expose: true, method: "DELETE", path: "/scripts/:id" },
   async (params) => {

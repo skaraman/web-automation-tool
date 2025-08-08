@@ -18,7 +18,6 @@ export interface ListExecutionsResponse {
   }[];
 }
 
-// Retrieves execution history for scripts.
 export const listExecutions = api<ListExecutionsParams, ListExecutionsResponse>(
   { expose: true, method: "GET", path: "/executions" },
   async (params) => {

@@ -17,7 +17,6 @@ export interface CreateScriptResponse {
   updatedAt: Date;
 }
 
-// Creates a new automation script.
 export const createScript = api<CreateScriptRequest, CreateScriptResponse>(
   { expose: true, method: "POST", path: "/scripts" },
   async (req) => {
@@ -39,7 +38,6 @@ export const createScript = api<CreateScriptRequest, CreateScriptResponse>(
       throw new Error("Failed to create script");
     }
 
-    // Parse steps if they come as a string
     let parsedSteps: AutomationStep[];
     if (typeof result.steps === 'string') {
       try {
