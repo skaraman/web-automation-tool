@@ -1,0 +1,5 @@
+Avoid complex logic by following these principles -
+Input data can be converted into primitive types or objects/arrays
+All logic can be encapsulated into a function or functions
+Output data can be changed and manipulated into anything that results in visible output
+it's ok to use bad practices if they produce a working solution
