@@ -5,8 +5,14 @@ export interface GetScreenshotParams {
   id: number;
 }
 
+export interface GetScreenshotResponse {
+  data: string;
+  contentType: string;
+  filename: string;
+}
+
 // Retrieves a screenshot by database ID.
-export const getScreenshot = api<GetScreenshotParams, Buffer>(
+export const getScreenshot = api<GetScreenshotParams, GetScreenshotResponse>(
   { expose: true, method: "GET", path: "/screenshots/:id" },
   async (params) => {
     try {
@@ -24,7 +30,14 @@ export const getScreenshot = api<GetScreenshotParams, Buffer>(
         throw APIError.notFound("Screenshot not found");
       }
 
-      return screenshot.data;
+      // Convert buffer to base64 string for JSON response
+      const base64Data = screenshot.data.toString('base64');
+
+      return {
+        data: base64Data,
+        contentType: screenshot.content_type,
+        filename: screenshot.filename,
+      };
     } catch (error) {
       if (error instanceof APIError) {
         throw error;

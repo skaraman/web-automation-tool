@@ -276,7 +276,24 @@ interface ScreenshotCardProps {
 }
 
 function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
-  const screenshotUrl = `${window.location.origin}${screenshot.url}`;
+  // Fetch the actual screenshot data
+  const { data: screenshotData } = useQuery({
+    queryKey: ["screenshot", screenshot.id],
+    queryFn: () => backend.automation.getScreenshot({ id: screenshot.id }),
+  });
+
+  const screenshotUrl = screenshotData ? `data:${screenshotData.contentType};base64,${screenshotData.data}` : null;
+
+  const handleDownload = () => {
+    if (!screenshotData) return;
+    
+    const link = document.createElement('a');
+    link.href = `data:${screenshotData.contentType};base64,${screenshotData.data}`;
+    link.download = screenshotData.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="border rounded-lg p-4">
@@ -288,40 +305,49 @@ function ScreenshotCard({ screenshot, index }: ScreenshotCardProps) {
           </span>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href={screenshotUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-3 w-3 mr-1" />
-              Open
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href={screenshotUrl} download={screenshot.filename}>
-              <Download className="h-3 w-3 mr-1" />
-              Download
-            </a>
-          </Button>
+          {screenshotUrl && (
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <a href={screenshotUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Open
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Download className="h-3 w-3 mr-1" />
+                Download
+              </Button>
+            </>
+          )}
         </div>
       </div>
       
       <div className="rounded-lg overflow-hidden border">
-        <img 
-          src={screenshotUrl} 
-          alt={`Step ${screenshot.stepNumber} screenshot`}
-          className="w-full h-auto max-h-64 object-contain bg-gray-50"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            const parent = target.parentElement;
-            if (parent) {
-              parent.innerHTML = `
-                <div class="bg-gray-100 rounded-lg p-8 text-center">
-                  <div class="text-sm text-gray-500">Failed to load screenshot</div>
-                  <div class="text-xs text-gray-400 mt-1">${screenshot.filename}</div>
-                </div>
-              `;
-            }
-          }}
-        />
+        {screenshotUrl ? (
+          <img 
+            src={screenshotUrl} 
+            alt={`Step ${screenshot.stepNumber} screenshot`}
+            className="w-full h-auto max-h-64 object-contain bg-gray-50"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                parent.innerHTML = `
+                  <div class="bg-gray-100 rounded-lg p-8 text-center">
+                    <div class="text-sm text-gray-500">Failed to load screenshot</div>
+                    <div class="text-xs text-gray-400 mt-1">${screenshot.filename}</div>
+                  </div>
+                `;
+              }
+            }}
+          />
+        ) : (
+          <div className="bg-gray-100 rounded-lg p-8 text-center">
+            <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+            <div className="text-sm text-gray-500">Loading screenshot...</div>
+          </div>
+        )}
       </div>
       
       <div className="text-xs text-gray-500 mt-2">
